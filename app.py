@@ -10,9 +10,7 @@ st.set_page_config(
 )
 
 # Logo no topo da página
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.image("https://raw.githubusercontent.com/logindomarcio/permutatum/main/logo.png", width=350)
+st.image("https://raw.githubusercontent.com/logindomarcio/permutatum/main/logo.png", use_container_width=True)
 
 st.markdown("---")
 
@@ -216,3 +214,4 @@ with st.expander("ℹ️ Como funciona o sistema"):
 st.markdown("---")
 
 st.caption("Sistema de Permuta da Magistratura Estadual - Versão com Supabase")
+
