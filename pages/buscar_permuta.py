@@ -77,18 +77,21 @@ def atualizar_magistrado(id_magistrado, dados_novos):
         return False, "Erro na conexão"
     
     try:
-        # Debug: mostrar dados que serão atualizados
-        st.write("DEBUG - Dados a serem atualizados:", dados_novos)
-        st.write("DEBUG - ID do magistrado:", id_magistrado)
+        # Primeiro, verificar se o registro ainda existe
+        verificacao = supabase.table("magistrados").select("*").eq("id", id_magistrado).execute()
         
+        if not verificacao.data:
+            return False, "Registro não encontrado. Faça logout e login novamente."
+        
+        # Se existe, fazer a atualização
         response = supabase.table("magistrados").update(dados_novos).eq("id", id_magistrado).execute()
         
-        # Debug: mostrar resposta
-        st.write("DEBUG - Resposta do Supabase:", response)
-        
-        return True, "Dados atualizados com sucesso!"
+        if response.data:
+            return True, "Dados atualizados com sucesso!"
+        else:
+            return False, "Falha na atualização. Tente novamente."
+            
     except Exception as e:
-        st.write("DEBUG - Erro:", str(e))
         return False, f"Erro ao atualizar: {str(e)}"
 # Função para excluir magistrado
 def excluir_magistrado(id_magistrado):
