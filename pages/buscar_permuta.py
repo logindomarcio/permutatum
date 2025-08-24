@@ -12,10 +12,8 @@ st.set_page_config(
     page_icon="🔍",
     layout="wide"
 )
-# Logo no topo da página
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.image("https://raw.githubusercontent.com/logindomarcio/permutatum/main/logo.png", width=350)
+# Logo no topo da página  
+st.image("https://raw.githubusercontent.com/logindomarcio/permutatum/main/logo.png", use_container_width=True)
 
 st.markdown("---")
 # Listas fixas
