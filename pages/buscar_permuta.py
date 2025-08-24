@@ -621,6 +621,14 @@ else:
                 submitted = st.form_submit_button("💾 Salvar Alterações", use_container_width=True)
                 
                 if submitted:
+                    # Recarregar dados atuais do usuário antes de tentar atualizar
+                    usuario_atual = verificar_email(usuario.get('email'))
+                    if not usuario_atual:
+                        st.error("Usuário não encontrado. Faça login novamente.")
+                        st.stop() 
+                    # Usar o ID atualizado
+                    usuario_id = usuario_atual.get('id')
+                    
                     # Validações básicas
                     erros = []
                     
@@ -653,7 +661,7 @@ else:
                             "telefone": telefone_novo.strip()
                         }
                         
-                        sucesso, mensagem = atualizar_magistrado(usuario.get('id'), dados_atualizados)
+                        sucesso, mensagem = atualizar_magistrado(usuario_id, dados_atualizados)
                         
                         if sucesso:
                             st.success(mensagem)
