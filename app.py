@@ -213,6 +213,18 @@ with st.expander("ℹ️ Como funciona o sistema"):
 
 st.markdown("---")
 
-st.caption("Sistema de Permuta da Magistratura Estadual - Versão com Supabase")
+# Rodapé
+st.markdown("""
+<div style="text-align: center; padding: 20px 0;">
+    <p style="margin: 5px 0; font-style: italic; font-family: 'Times New Roman', serif; font-size: 16px;">
+        <em>Permutatum</em>, 2025
+    </p>
+    <p style="margin: 5px 0; font-size: 14px; color: #666;">
+        Idealizado pelo Juiz Substituto do Tribunal de Justiça do Estado do Paraná, 
+        <em style="font-family: 'Times New Roman', serif;">Márcio Carneiro de M. Júnior</em>
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
 
 
