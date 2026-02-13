@@ -796,7 +796,7 @@ with col_btn1:
         atualizar_dados()
 
 with col_btn2:
-    if st.button("🤝 Colabore com a manutenção", use_container_width=True, type="primary"):
+    if st.button("☕ Contribua com um café para a manutenção", use_container_width=True, type="primary"):
         st.session_state["mostrar_pix"] = not st.session_state.get("mostrar_pix", False)
         st.rerun()
 
