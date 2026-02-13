@@ -1,18 +1,32 @@
 import streamlit as st
 from supabase import create_client, Client
+from datetime import datetime
 import re
+
+from utils.auth_supabase import obter_usuario_logado, fazer_logout
 
 # Configuração da página
 st.set_page_config(
-    page_title="Cadastrar dados",
-    page_icon="📝",
-    layout="wide"
+    page_title="Home",
+    page_icon="🏠",
+    layout="wide",
+    initial_sidebar_state="auto"
 )
 
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.image("https://raw.githubusercontent.com/logindomarcio/permutatum/main/logo.png", width=350)
-st.markdown("---")
+# Esconder navegação automática e usar links customizados
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebarNav"] {display: none;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.sidebar.page_link("app.py", label="🏠 Home")
+st.sidebar.page_link("pages/1_Cadastre-se.py", label="📋 Cadastre-se")
+st.sidebar.page_link("pages/2_Login_Acessar.py", label="🔑 Login / Acessar")
+
 
 # Função para conectar ao Supabase
 @st.cache_resource
@@ -25,34 +39,109 @@ def init_supabase():
         st.error(f"Erro ao conectar com Supabase: {e}")
         return None
 
+
+# ─────────────────────────────────────────────
+# Verificar autenticação
+# ─────────────────────────────────────────────
+supabase = init_supabase()
+usuario = obter_usuario_logado()
+
+if not usuario:
+    # Logo centralizada
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image(
+            "logo.png",
+            width=350,
+        )
+    st.markdown("---")
+
+    st.warning("⚠️ Acesso Restrito — Apenas Novos Cadastros")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### 📋 Já possui cadastro?")
+        st.info(
+            "Use a página **🔍 Buscar Permutas** para "
+            "acessar seus dados e encontrar permutas disponíveis."
+        )
+        if st.button("🔍 Ir para Buscar Permutas", use_container_width=True):
+            st.switch_page("pages/2_Login_Acessar.py")
+
+    with col2:
+        st.markdown("### 🔐 Primeiro acesso?")
+        st.info(
+            "Faça login com seu email funcional (@tjxx.jus.br) "
+            "para realizar seu primeiro cadastro no sistema."
+        )
+        if st.button(
+            "📋 Iniciar cadastro", use_container_width=True, type="primary"
+        ):
+            st.switch_page("pages/1_Cadastre-se.py")
+
+    # Rodapé
+    st.markdown("---")
+    st.markdown(
+        f"""
+    <div style="text-align: center; padding: 20px 0;">
+        <p style="margin: 5px 0; font-style: italic; font-family: 'Times New Roman', serif; font-size: 16px;">
+            <em>Permutatum</em>
+        </p>
+        <p style="margin: 5px 0; font-size: 13px; color: #888;">
+            Castro/PR — {datetime.now().year}
+        </p>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    st.stop()
+
+# ─────────────────────────────────────────────
+# Usuário autenticado — exibir página completa
+# ─────────────────────────────────────────────
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    st.image(
+        "logo.png",
+        width=350,
+    )
+st.markdown("---")
+
+st.success(f"✅ Autenticado como: **{usuario['email']}**")
+st.markdown("---")
+
 # Opções fixas dos campos
 ENTRANCIAS = [
     "Juiz(a) Substituto(a)",
-    "Inicial", 
+    "Inicial",
     "Intermediária",
     "Final",
     "Única",
-    "2º Grau"
+    "2º Grau",
 ]
 
 TRIBUNAIS = [
     "TJAC", "TJAL", "TJAP", "TJAM", "TJBA", "TJCE", "TJDFT", "TJES",
-    "TJGO", "TJMA", "TJMT", "TJMS", "TJMG", "TJPA", "TJPB", "TJPR", 
+    "TJGO", "TJMA", "TJMT", "TJMS", "TJMG", "TJPA", "TJPB", "TJPR",
     "TJPE", "TJPI", "TJRJ", "TJRN", "TJRS", "TJRO", "TJRR", "TJSC",
-    "TJSE", "TJSP", "TJTO"
+    "TJSE", "TJSP", "TJTO",
 ]
+
 
 # Função para validar email
 def validar_email(email):
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     return re.match(pattern, email) is not None
+
 
 # Função para inserir dados
 def inserir_magistrado(dados):
     supabase = init_supabase()
     if not supabase:
         return False, "Erro na conexão com o banco de dados"
-    
+
     try:
         response = supabase.table("magistrados").insert(dados).execute()
         return True, "Dados cadastrados com sucesso!"
@@ -61,9 +150,16 @@ def inserir_magistrado(dados):
             return False, "Este email já está cadastrado no sistema"
         return False, f"Erro ao cadastrar: {str(e)}"
 
+
 # Interface principal
 st.title("⚖️ Sistema de Permuta da Magistratura")
-st.write("Esta aplicação é gratuita e colaborativa e, tendo em vista que o link para cadastro e acesso foi fornecido individualmente a cada magistrado(a), os dados aqui presentes limitam-se ao fim de facilitar encontros de permutantes. Esta aplicação é privada e a partir do cadastro dos dados, o(a) magistrado(a) assume a responsabilidade.")
+st.write(
+    "Esta aplicação é gratuita e colaborativa e, tendo em vista que o link "
+    "para cadastro e acesso foi fornecido individualmente a cada magistrado(a), "
+    "os dados aqui presentes limitam-se ao fim de facilitar encontros de "
+    "permutantes. Esta aplicação é privada e a partir do cadastro dos dados, "
+    "o(a) magistrado(a) assume a responsabilidade."
+)
 
 st.subheader("Cadastro de Magistrado")
 
@@ -72,107 +168,116 @@ st.info("📝 Preencha seus dados para participar do sistema de permutas entre t
 # Formulário
 with st.form("cadastro_magistrado", clear_on_submit=True):
     col1, col2 = st.columns(2)
-    
+
     with col1:
         nome = st.text_input(
             "Nome Completo *",
             placeholder="Digite seu nome completo",
-            help="Nome completo como aparece nos documentos oficiais"
+            help="Nome completo como aparece nos documentos oficiais",
         )
-        
+
         entrancia = st.selectbox(
             "Entrância *",
             options=[""] + ENTRANCIAS,
-            help="Selecione sua entrância atual"
+            help="Selecione sua entrância atual",
         )
-        
+
         origem = st.selectbox(
             "Tribunal de Origem *",
             options=[""] + TRIBUNAIS,
-            help="Tribunal onde você atualmente trabalha"
+            help="Tribunal onde você atualmente trabalha",
         )
-        
+
         telefone = st.text_input(
             "Telefone *",
             placeholder="(11) 99999-9999",
-            help="Telefone para contato"
+            help="Telefone para contato",
         )
-    
+
+        telefone_visivel = st.checkbox(
+            "Tornar meu telefone visível para outros magistrados",
+            value=True,
+            help="Se desmarcado, apenas seu email será exibido como forma de contato",
+        )
+
     with col2:
         email = st.text_input(
             "E-mail *",
             placeholder="seu.email@exemplo.com",
-            help="Email será usado para acessar suas informações no sistema"
+            help="Email será usado para acessar suas informações no sistema",
         )
-        
+
         destino_1 = st.selectbox(
             "1º Destino Desejado *",
             options=[""] + TRIBUNAIS,
-            help="Tribunal de maior interesse para permuta"
+            help="Tribunal de maior interesse para permuta",
         )
-        
+
         destino_2 = st.selectbox(
             "2º Destino Desejado (Opcional)",
             options=[""] + TRIBUNAIS,
-            help="Segunda opção de tribunal"
+            help="Segunda opção de tribunal",
         )
-        
+
         destino_3 = st.selectbox(
             "3º Destino Desejado (Opcional)",
             options=[""] + TRIBUNAIS,
-            help="Terceira opção de tribunal"
+            help="Terceira opção de tribunal",
         )
-    
+
     st.markdown("---")
     st.caption("* Campos obrigatórios")
-    
-    submitted = st.form_submit_button("📤 Cadastrar Dados", use_container_width=True)
-    
+
+    submitted = st.form_submit_button(
+        "📤 Cadastrar Dados", use_container_width=True
+    )
+
     if submitted:
         # Validações
         erros = []
-        
+
         if not nome.strip():
             erros.append("Nome é obrigatório")
-        
+
         if not entrancia:
             erros.append("Entrância é obrigatória")
-        
+
         if not origem:
             erros.append("Tribunal de origem é obrigatório")
-        
+
         if not destino_1:
             erros.append("Primeiro destino é obrigatório")
-        
+
         if not email.strip():
             erros.append("E-mail é obrigatório")
         elif not validar_email(email):
             erros.append("E-mail inválido")
-        
+
         if not telefone.strip():
             erros.append("Telefone é obrigatório")
-        
+
         if origem == destino_1:
             erros.append("Destino não pode ser igual ao tribunal de origem")
-        
+
         if destino_2 and destino_2 == origem:
             erros.append("2º destino não pode ser igual ao tribunal de origem")
-        
+
         if destino_3 and destino_3 == origem:
             erros.append("3º destino não pode ser igual ao tribunal de origem")
-        
+
         if destino_2 and destino_1 == destino_2:
             erros.append("2º destino deve ser diferente do 1º destino")
-        
+
         if destino_3 and (destino_1 == destino_3 or destino_2 == destino_3):
             erros.append("3º destino deve ser diferente dos anteriores")
-        
+
         if erros:
             for erro in erros:
                 st.error(f"❌ {erro}")
         else:
             # Preparar dados para inserção
             dados_magistrado = {
+                "user_id": usuario["user_id"],
                 "nome": nome.strip(),
                 "entrancia": entrancia,
                 "origem": origem,
@@ -181,15 +286,19 @@ with st.form("cadastro_magistrado", clear_on_submit=True):
                 "destino_3": destino_3 if destino_3 else None,
                 "email": email.strip().lower(),
                 "telefone": telefone.strip(),
-                "status": "ativo"
+                "telefone_visivel": telefone_visivel,
+                "status": "ativo",
             }
-            
+
             # Inserir no banco
             sucesso, mensagem = inserir_magistrado(dados_magistrado)
-            
+
             if sucesso:
                 st.success(f"✅ {mensagem}")
-                st.info("🔍 Para consultar as permutas disponíveis, use a página de consulta com seu e-mail cadastrado.")
+                st.info(
+                    "🔍 Para consultar as permutas disponíveis, "
+                    "use a página de consulta com seu e-mail cadastrado."
+                )
                 st.balloons()
             else:
                 st.error(f"❌ {mensagem}")
@@ -197,34 +306,35 @@ with st.form("cadastro_magistrado", clear_on_submit=True):
 # Informações do sistema
 st.markdown("---")
 with st.expander("ℹ️ Como funciona o sistema"):
-    st.markdown("""
+    st.markdown(
+        """
     ### Sistema de Permuta da Magistratura
-    
+
     1. **Cadastro**: Preencha seus dados com tribunal atual e destinos desejados
     2. **Consulta**: Use seu email para acessar a página de consulta
     3. **Permutas**: Veja magistrados que querem vir para seu tribunal
     4. **Contato**: Entre em contato diretamente com interessados
-    
+
     ### Privacidade
     - Seus dados só são visíveis para magistrados cadastrados
     - Acesso à consulta é feito através do email cadastrado
     - Sistema seguro e protegido
-    """)
+    """
+    )
 
 st.markdown("---")
 
 # Rodapé
-st.markdown("""
+st.markdown(
+    f"""
 <div style="text-align: center; padding: 20px 0;">
     <p style="margin: 5px 0; font-style: italic; font-family: 'Times New Roman', serif; font-size: 16px;">
-        <em>Permutatum</em>, 2025
+        <em>Permutatum</em>
     </p>
-    <p style="margin: 5px 0; font-size: 14px; color: #666;">
-        Idealizado pelo Juiz Substituto do Tribunal de Justiça do Estado do Paraná, 
-        <em style="font-family: 'Times New Roman', serif;">Márcio Carneiro de M. Júnior</em>
+    <p style="margin: 5px 0; font-size: 13px; color: #888;">
+        Castro/PR — {datetime.now().year}
     </p>
 </div>
-""", unsafe_allow_html=True)
-
-
-
+""",
+    unsafe_allow_html=True,
+)
