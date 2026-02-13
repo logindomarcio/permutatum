@@ -740,6 +740,224 @@ def pecas_faltantes_expandidas(origem_filtro, destino_filtro, dados, limite=50, 
     return pecas
 
 
+def buscar_quadrangulacao_func(origem_filtro, destino_filtro, dados, limite=30):
+    """
+    Busca quadrangulações (ciclo de 4 magistrados) usando APENAS destino_1.
+    Ciclo: origem → A → B → destino → origem
+    Onde:
+    - mag_1 está na origem, destino_1 = A
+    - mag_2 está em A, destino_1 = B
+    - mag_3 está em B, destino_1 = destino
+    - mag_4 está no destino, destino_1 = origem
+    """
+    quadrangulacoes = []
+    vistos = set()
+
+    for mag_1 in dados:
+        if mag_1.get('origem') != origem_filtro:
+            continue
+        tribunal_a = mag_1.get('destino_1')
+        if not tribunal_a or tribunal_a == destino_filtro or tribunal_a == origem_filtro:
+            continue
+
+        for mag_2 in dados:
+            if mag_2.get('origem') != tribunal_a:
+                continue
+            tribunal_b = mag_2.get('destino_1')
+            if not tribunal_b or tribunal_b == origem_filtro or tribunal_b == tribunal_a or tribunal_b == destino_filtro:
+                continue
+
+            for mag_3 in dados:
+                if mag_3.get('origem') != tribunal_b:
+                    continue
+                if mag_3.get('destino_1') != destino_filtro:
+                    continue
+
+                for mag_4 in dados:
+                    if mag_4.get('origem') != destino_filtro:
+                        continue
+                    if mag_4.get('destino_1') != origem_filtro:
+                        continue
+
+                    nomes = tuple(sorted(m.get('nome', '') for m in [mag_1, mag_2, mag_3, mag_4]))
+                    seq = f"{origem_filtro} → {tribunal_a} → {tribunal_b} → {destino_filtro} → {origem_filtro}"
+                    chave = (nomes, seq)
+
+                    if chave not in vistos:
+                        vistos.add(chave)
+                        quadrangulacoes.append({
+                            'magistrados': [mag_1, mag_2, mag_3, mag_4],
+                            'sequencia': seq,
+                            'tribunais': [origem_filtro, tribunal_a, tribunal_b, destino_filtro]
+                        })
+
+                        if len(quadrangulacoes) >= limite:
+                            return quadrangulacoes
+
+    return quadrangulacoes
+
+
+def pecas_faltantes_quadrangulacao(origem_filtro, destino_filtro, dados, limite=30):
+    """
+    Encontra quadrangulações quase completas: 3 magistrados encaixam,
+    falta 1 para fechar o ciclo de 4. Apenas destino_1.
+    """
+    pecas = []
+    vistos = set()
+
+    # Cenário 1: mag_1(origem→A), mag_2(A→B), mag_3(B→destino), falta mag_4(destino→origem)
+    for mag_1 in dados:
+        if mag_1.get('origem') != origem_filtro:
+            continue
+        tribunal_a = mag_1.get('destino_1')
+        if not tribunal_a or tribunal_a == destino_filtro or tribunal_a == origem_filtro:
+            continue
+
+        for mag_2 in dados:
+            if mag_2.get('origem') != tribunal_a:
+                continue
+            tribunal_b = mag_2.get('destino_1')
+            if not tribunal_b or tribunal_b == origem_filtro or tribunal_b == tribunal_a or tribunal_b == destino_filtro:
+                continue
+
+            for mag_3 in dados:
+                if mag_3.get('origem') != tribunal_b:
+                    continue
+                if mag_3.get('destino_1') != destino_filtro:
+                    continue
+
+                # Verificar se existe mag_4(destino→origem)
+                tem_quarto = False
+                for mag_4 in dados:
+                    if mag_4.get('origem') != destino_filtro:
+                        continue
+                    if mag_4.get('destino_1') == origem_filtro:
+                        tem_quarto = True
+                        break
+
+                if not tem_quarto:
+                    seq = f"{origem_filtro} → {tribunal_a} → {tribunal_b} → {destino_filtro} → {origem_filtro}"
+                    chave = (mag_1.get('nome'), mag_2.get('nome'), mag_3.get('nome'), seq)
+                    if chave not in vistos:
+                        vistos.add(chave)
+                        pecas.append({
+                            'magistrados': [mag_1, mag_2, mag_3],
+                            'sequencia': seq,
+                            'falta': f"Magistrado do {destino_filtro} com destino {origem_filtro}",
+                            'posicao_faltante': 4
+                        })
+                        if len(pecas) >= limite:
+                            return pecas
+
+    # Cenário 2: mag_1(origem→A), mag_2(A→B), falta mag_3(B→destino), mag_4(destino→origem) existe
+    for mag_1 in dados:
+        if mag_1.get('origem') != origem_filtro:
+            continue
+        tribunal_a = mag_1.get('destino_1')
+        if not tribunal_a or tribunal_a == destino_filtro or tribunal_a == origem_filtro:
+            continue
+
+        for mag_2 in dados:
+            if mag_2.get('origem') != tribunal_a:
+                continue
+            tribunal_b = mag_2.get('destino_1')
+            if not tribunal_b or tribunal_b == origem_filtro or tribunal_b == tribunal_a or tribunal_b == destino_filtro:
+                continue
+
+            # Verificar se existe mag_3(B→destino)
+            tem_terceiro = False
+            for mag_3 in dados:
+                if mag_3.get('origem') != tribunal_b:
+                    continue
+                if mag_3.get('destino_1') == destino_filtro:
+                    tem_terceiro = True
+                    break
+
+            if not tem_terceiro:
+                # Verificar se existe mag_4(destino→origem) para confirmar que é quase completa
+                for mag_4 in dados:
+                    if mag_4.get('origem') != destino_filtro:
+                        continue
+                    if mag_4.get('destino_1') != origem_filtro:
+                        continue
+
+                    seq = f"{origem_filtro} → {tribunal_a} → {tribunal_b} → {destino_filtro} → {origem_filtro}"
+                    chave = (mag_1.get('nome'), mag_2.get('nome'), mag_4.get('nome'), seq)
+                    if chave not in vistos:
+                        vistos.add(chave)
+                        pecas.append({
+                            'magistrados': [mag_1, mag_2, mag_4],
+                            'sequencia': seq,
+                            'falta': f"Magistrado do {tribunal_b} com destino {destino_filtro}",
+                            'posicao_faltante': 3
+                        })
+                        if len(pecas) >= limite:
+                            return pecas
+
+    # Cenário 3: mag_1(origem→A), falta mag_2(A→B), mag_3(B→destino) e mag_4(destino→origem) existem
+    for mag_1 in dados:
+        if mag_1.get('origem') != origem_filtro:
+            continue
+        tribunal_a = mag_1.get('destino_1')
+        if not tribunal_a or tribunal_a == destino_filtro or tribunal_a == origem_filtro:
+            continue
+
+        # Para cada possível tribunal_b (origens no banco que não sejam origem, A ou destino)
+        tribunais_b_possiveis = set()
+        for m in dados:
+            o = m.get('origem')
+            if o and o != origem_filtro and o != tribunal_a and o != destino_filtro:
+                tribunais_b_possiveis.add(o)
+
+        for tribunal_b in tribunais_b_possiveis:
+            # Verificar se existe mag_2(A→B)
+            tem_segundo = False
+            for mag_2 in dados:
+                if mag_2.get('origem') != tribunal_a:
+                    continue
+                if mag_2.get('destino_1') == tribunal_b:
+                    tem_segundo = True
+                    break
+
+            if tem_segundo:
+                continue  # Se existe, não é peça faltante nesta posição
+
+            # Verificar se mag_3(B→destino) e mag_4(destino→origem) existem
+            tem_terceiro = False
+            mag_3_ref = None
+            for mag_3 in dados:
+                if mag_3.get('origem') != tribunal_b:
+                    continue
+                if mag_3.get('destino_1') == destino_filtro:
+                    tem_terceiro = True
+                    mag_3_ref = mag_3
+                    break
+
+            if not tem_terceiro:
+                continue
+
+            for mag_4 in dados:
+                if mag_4.get('origem') != destino_filtro:
+                    continue
+                if mag_4.get('destino_1') != origem_filtro:
+                    continue
+
+                seq = f"{origem_filtro} → {tribunal_a} → {tribunal_b} → {destino_filtro} → {origem_filtro}"
+                chave = (mag_1.get('nome'), mag_3_ref.get('nome'), mag_4.get('nome'), seq)
+                if chave not in vistos:
+                    vistos.add(chave)
+                    pecas.append({
+                        'magistrados': [mag_1, mag_3_ref, mag_4],
+                        'sequencia': seq,
+                        'falta': f"Magistrado do {tribunal_a} com destino {tribunal_b}",
+                        'posicao_faltante': 2
+                    })
+                    if len(pecas) >= limite:
+                        return pecas
+
+    return pecas
+
+
 # Função para buscar novos cadastros
 def buscar_novos_cadastros(dias=60):
     """Busca magistrados cadastrados nos últimos X dias."""
@@ -762,6 +980,38 @@ def buscar_novos_cadastros(dias=60):
     except Exception as e:
         st.error(f"Erro ao buscar novos cadastros: {e}")
         return []
+
+def buscar_notificacoes(email):
+    """Busca notificações não lidas para o usuário."""
+    supabase = init_supabase()
+    if not supabase:
+        return []
+    try:
+        response = (
+            supabase.table("notificacoes")
+            .select("*")
+            .eq("email_destino", email)
+            .eq("lida", False)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return response.data if response.data else []
+    except:
+        return []
+
+
+def marcar_notificacoes_lidas(email):
+    """Marca todas as notificações do usuário como lidas."""
+    supabase = init_supabase()
+    if not supabase:
+        return
+    try:
+        supabase.table("notificacoes").update(
+            {"lida": True}
+        ).eq("email_destino", email).eq("lida", False).execute()
+    except:
+        pass
+
 
 # Função para exibir magistrado
 def exibir_magistrado(magistrado, prioridade=None):
@@ -845,6 +1095,11 @@ if 'usuario_autenticado' not in st.session_state:
 if "pecas_etapa" not in st.session_state:
     st.session_state["pecas_etapa"] = 0
 
+if "quad_resultados" not in st.session_state:
+    st.session_state["quad_resultados"] = None
+if "pecas_quad" not in st.session_state:
+    st.session_state["pecas_quad"] = None
+
 if not st.session_state.usuario_autenticado:
     st.write("Digite seu e-mail para acessar a aplicação:")
     
@@ -868,7 +1123,43 @@ else:
     # Usuário autenticado - mostrar sistema completo
     usuario = st.session_state.usuario_autenticado
     dados = carregar_dados()
-    
+
+    # ── Verificar notificações ──
+    notificacoes = buscar_notificacoes(usuario.get('email', ''))
+    if notificacoes:
+        st.markdown(
+            f"""
+            <div style="background-color: #d4edda; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; border: 1px solid #c3e6cb; border-left: 5px solid #28a745;">
+                <p style="margin: 0 0 8px 0; font-size: 16px; color: #155724; font-weight: bold;">
+                    🔔 Você tem {len(notificacoes)} notificação(ões) nova(s)!
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        for notif in notificacoes:
+            tipo_emoji = "🔄" if notif.get('tipo') == 'permuta_direta' else "🔺"
+            st.markdown(
+                f"""
+                <div style="background-color: #fff3cd; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; border-left: 4px solid #ffc107;">
+                    <p style="margin: 0; font-size: 14px; color: #856404;">
+                        {tipo_emoji} {notif.get('mensagem', '')}
+                    </p>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; color: #999;">
+                        {notif.get('detalhes', '')}
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        if st.button("✅ Marcar notificações como lidas", key="btn_marcar_lidas"):
+            marcar_notificacoes_lidas(usuario.get('email', ''))
+            st.rerun()
+
+        st.markdown("---")
+
     # Gráficos e estatísticas
     gerar_graficos(dados)
     
@@ -901,13 +1192,24 @@ else:
                         </td>
                         <td style="padding: 8px 12px; vertical-align: top; width: 33%;">
                             <strong>🔺 Buscar Triangulação</strong><br>
-                            Encontra permutas indiretas entre 3 magistrados, quando não há par direto.
-                            Ex: TJGO → TJBA → TJSP → TJGO, onde cada um vai para o tribunal do próximo.
+                            Permutas indiretas entre 3 magistrados.
+                            Ex: TJGO → TJBA → TJSP → TJGO.
                         </td>
                         <td style="padding: 8px 12px; vertical-align: top; width: 33%;">
                             <strong>🧩 Peças Faltantes</strong><br>
-                            Mostra triangulações quase completas: já existem 2 magistrados encaixados
-                            e falta apenas 1 para fechar o ciclo. Útil para saber quem aguardar.
+                            Triangulações quase completas: 2 magistrados encaixados, falta 1 para fechar.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px 12px; vertical-align: top; width: 50%;" colspan="1">
+                            <strong>🔷 Buscar Quadrangulação</strong><br>
+                            Permutas indiretas entre 4 magistrados em ciclo.
+                            Ex: TJGO → TJBA → TJSP → TJRJ → TJGO.
+                            Apenas destinos prioritários.
+                        </td>
+                        <td style="padding: 8px 12px; vertical-align: top; width: 50%;" colspan="2">
+                            <strong>🧩 Peças Faltantes (quadrangulação)</strong><br>
+                            Quadrangulações quase completas: 3 magistrados encaixados, falta 1 para fechar o ciclo de 4.
                         </td>
                     </tr>
                 </table>
@@ -946,6 +1248,14 @@ else:
         with col_b3:
             buscar_pecas = st.button("🧩 Peças faltantes", use_container_width=True, key="btn_buscar_pecas")
 
+        col_b4, col_b5 = st.columns(2)
+
+        with col_b4:
+            btn_buscar_quad = st.button("🔷 Buscar Quadrangulação", use_container_width=True, type="primary", key="btn_buscar_quad")
+
+        with col_b5:
+            btn_buscar_pecas_quad = st.button("🧩 Peças faltantes (quadrangulação)", use_container_width=True, key="btn_buscar_pecas_quad")
+
         # Validação comum
         def validar_selecao():
             if not origem_filtro or not destino_filtro:
@@ -967,6 +1277,8 @@ else:
                 st.session_state["tri_etapa_busca"] = 0
                 st.session_state["tri_prio_busca"] = []
                 st.session_state["tri_exp_busca"] = []
+                st.session_state["quad_resultados"] = None
+                st.session_state["pecas_quad"] = None
 
                 permutas_diretas, _ = busca_livre_inteligente(origem_filtro, destino_filtro, dados)
 
@@ -1007,6 +1319,8 @@ else:
         # ═══════════════════════════════════
         if buscar_triangulacao:
             if validar_selecao():
+                st.session_state["quad_resultados"] = None
+                st.session_state["pecas_quad"] = None
                 with st.spinner("Buscando triangulações prioritárias (destino 1)..."):
                     resultado = triangular_prioritarias(origem_filtro, destino_filtro, dados)
                     st.session_state["tri_prio_busca"] = resultado
@@ -1123,6 +1437,8 @@ else:
         # ═══════════════════════════════════
         if buscar_pecas:
             if validar_selecao():
+                st.session_state["quad_resultados"] = None
+                st.session_state["pecas_quad"] = None
                 with st.spinner("Buscando peças faltantes prioritárias (destino 1)..."):
                     resultado = pecas_faltantes_prioritarias(origem_filtro, destino_filtro, dados)
                     st.session_state["pecas_prio"] = resultado
@@ -1267,6 +1583,129 @@ else:
                 st.session_state["pecas_etapa"] = 0
                 st.session_state["pecas_prio"] = []
                 st.session_state["pecas_exp"] = []
+                st.rerun()
+
+        # ═══════════════════════════════════
+        # BUSCAR QUADRANGULAÇÃO
+        # ═══════════════════════════════════
+        if btn_buscar_quad:
+            if validar_selecao():
+                st.session_state["tri_etapa_busca"] = 0
+                st.session_state["tri_prio_busca"] = []
+                st.session_state["tri_exp_busca"] = []
+                st.session_state["pecas_etapa"] = 0
+                st.session_state["pecas_prio"] = []
+                st.session_state["pecas_exp"] = []
+                with st.spinner("Buscando quadrangulações (destino 1 apenas)..."):
+                    resultado = buscar_quadrangulacao_func(origem_filtro, destino_filtro, dados, limite=30)
+                    st.session_state["quad_resultados"] = resultado
+                    st.session_state["quad_origem"] = origem_filtro
+                    st.session_state["quad_destino"] = destino_filtro
+                    st.rerun()
+
+        if st.session_state.get("quad_resultados") is not None:
+            quad = st.session_state["quad_resultados"]
+            origem_q = st.session_state.get("quad_origem", "")
+            destino_q = st.session_state.get("quad_destino", "")
+
+            st.subheader(f"🔷 Quadrangulações: {origem_q} ↔ {destino_q}")
+
+            if quad:
+                st.success(f"**{len(quad)}** quadrangulações encontradas (destino 1 apenas, máx. 30)")
+
+                for i, q in enumerate(quad, 1):
+                    with st.expander(f"🔷 Quadrangulação {i}: {q['sequencia']}"):
+                        st.info("🔷 **Quadrangulação de 4 Magistrados**")
+                        st.write("Operação coordenada entre quatro magistrados:")
+                        st.write(f"**Sequência:** {q['sequencia']}")
+                        st.write("**Magistrados envolvidos:**")
+                        for j, mag in enumerate(q['magistrados']):
+                            exibir_magistrado(mag)
+                            if j < len(q['magistrados']) - 1:
+                                st.write("⬇️")
+                        st.success("💡 **Coordenação necessária:** Todos os 4 magistrados precisam concordar simultaneamente")
+            else:
+                st.info(f"Nenhuma quadrangulação encontrada entre {origem_q} e {destino_q} com destinos prioritários.")
+
+            if st.button("🔄 Nova busca de quadrangulação", key="btn_quad_reset"):
+                st.session_state["quad_resultados"] = None
+                st.rerun()
+
+        # ═══════════════════════════════════
+        # PEÇAS FALTANTES QUADRANGULAÇÃO
+        # ═══════════════════════════════════
+        if btn_buscar_pecas_quad:
+            if validar_selecao():
+                st.session_state["tri_etapa_busca"] = 0
+                st.session_state["tri_prio_busca"] = []
+                st.session_state["tri_exp_busca"] = []
+                st.session_state["pecas_etapa"] = 0
+                st.session_state["pecas_prio"] = []
+                st.session_state["pecas_exp"] = []
+                with st.spinner("Buscando peças faltantes para quadrangulação (destino 1)..."):
+                    resultado = pecas_faltantes_quadrangulacao(origem_filtro, destino_filtro, dados, limite=30)
+                    st.session_state["pecas_quad"] = resultado
+                    st.session_state["pecas_quad_origem"] = origem_filtro
+                    st.session_state["pecas_quad_destino"] = destino_filtro
+                    st.rerun()
+
+        if st.session_state.get("pecas_quad") is not None:
+            pecas_q = st.session_state["pecas_quad"]
+            origem_pq = st.session_state.get("pecas_quad_origem", "")
+            destino_pq = st.session_state.get("pecas_quad_destino", "")
+
+            st.subheader(f"🧩 Peças Faltantes (Quadrangulação): {origem_pq} ↔ {destino_pq}")
+
+            if pecas_q:
+                st.warning(f"**{len(pecas_q)}** quadrangulações quase completas — falta 1 magistrado para fechar o ciclo de 4!")
+
+                for i, peca in enumerate(pecas_q, 1):
+                    with st.expander(f"🧩 Quase completa {i}: {peca['sequencia']}"):
+                        st.write(f"**Sequência:** {peca['sequencia']}")
+                        st.markdown(
+                            f"""
+                            <div style="background-color: #fff3cd; border-radius: 8px; padding: 12px; border-left: 4px solid #ffc107; margin: 10px 0;">
+                                <strong>⚠️ Falta:</strong> {peca['falta']}
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        st.write("**Magistrados já encaixados:**")
+                        for j, mag in enumerate(peca['magistrados']):
+                            exibir_magistrado(mag)
+                            if j < len(peca['magistrados']) - 1:
+                                st.write("⬇️")
+
+                        # Botão compartilhar WhatsApp
+                        msg_whats = (
+                            f"🧩 *Permutatum — Quadrangulação quase completa*\n\n"
+                            f"Sequência: *{peca['sequencia']}*\n"
+                            f"⚠️ *{peca['falta']}*\n\n"
+                            f"Já estão encaixados 3 magistrados. "
+                            f"Falta apenas 1 para fechar o ciclo de 4!\n\n"
+                            f"Cadastre-se: 👉 https://permutatum.streamlit.app/"
+                        )
+                        link_wpp = gerar_link_whatsapp(msg_whats)
+                        st.markdown(
+                            f"""
+                            <a href="{link_wpp}" target="_blank" style="
+                                display: inline-block;
+                                background-color: #25D366;
+                                color: white;
+                                padding: 8px 16px;
+                                border-radius: 8px;
+                                text-decoration: none;
+                                font-size: 14px;
+                                font-weight: 500;
+                            ">📲 Compartilhar no WhatsApp</a>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+            else:
+                st.info(f"Nenhuma quadrangulação incompleta encontrada entre {origem_pq} e {destino_pq}.")
+
+            if st.button("🔄 Nova busca de peças (quadrangulação)", key="btn_pecas_quad_reset"):
+                st.session_state["pecas_quad"] = None
                 st.rerun()
 
     with tab2:
@@ -1709,6 +2148,56 @@ else:
                             if sucesso:
                                 st.success("✅ " + mensagem)
                                 st.cache_data.clear()
+                                # ── Gerar notificações de match após edição ──
+                                try:
+                                    supabase_notif = init_supabase()
+                                    if supabase_notif:
+                                        todos = supabase_notif.table("magistrados").select("*").eq("status", "ativo").execute()
+                                        if todos.data:
+                                            novo_origem = dados_atualizados.get('origem', '')
+                                            novo_destino_1 = dados_atualizados.get('destino_1', '')
+                                            novo_email = dados_atualizados.get('email', '')
+                                            novo_nome = dados_atualizados.get('nome', '')
+
+                                            for mag in todos.data:
+                                                if mag.get('email', '').lower() == novo_email.lower():
+                                                    continue
+
+                                                mag_origem = mag.get('origem', '')
+                                                mag_destino_1 = mag.get('destino_1', '')
+
+                                                if mag_origem == novo_destino_1 and mag_destino_1 == novo_origem:
+                                                    # Verificar se já existe notificação igual não lida para evitar duplicatas
+                                                    existente = supabase_notif.table("notificacoes").select("id").eq(
+                                                        "email_destino", mag.get('email', '')
+                                                    ).eq("lida", False).ilike(
+                                                        "mensagem", f"%{novo_nome}%"
+                                                    ).execute()
+
+                                                    if not existente.data:
+                                                        supabase_notif.table("notificacoes").insert({
+                                                            "email_destino": mag.get('email', ''),
+                                                            "tipo": "permuta_direta",
+                                                            "mensagem": f"Novo match! {novo_nome} ({novo_origem}) atualizou dados — destino {novo_destino_1}, permuta direta possível!",
+                                                            "detalhes": f"Confira na aba 'Busca de Permuta' selecionando {mag_origem} → {novo_origem}."
+                                                        }).execute()
+
+                                                    # Notificar também quem editou
+                                                    existente2 = supabase_notif.table("notificacoes").select("id").eq(
+                                                        "email_destino", novo_email
+                                                    ).eq("lida", False).ilike(
+                                                        "mensagem", f"%{mag.get('nome', '')}%"
+                                                    ).execute()
+
+                                                    if not existente2.data:
+                                                        supabase_notif.table("notificacoes").insert({
+                                                            "email_destino": novo_email,
+                                                            "tipo": "permuta_direta",
+                                                            "mensagem": f"Boa notícia! {mag.get('nome', '')} ({mag_origem}) quer ir para {mag_destino_1} — permuta direta possível!",
+                                                            "detalhes": f"Confira na aba 'Busca de Permuta' selecionando {novo_origem} → {novo_destino_1}."
+                                                        }).execute()
+                                except:
+                                    pass  # Não bloquear a edição por erro de notificação
                                 usuario_atualizado = verificar_email(email_novo.strip().lower())
                                 if usuario_atualizado:
                                     st.session_state.usuario_autenticado = usuario_atualizado

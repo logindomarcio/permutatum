@@ -300,6 +300,43 @@ with st.form("cadastro_magistrado", clear_on_submit=True):
                     "use a página de consulta com seu e-mail cadastrado."
                 )
                 st.balloons()
+
+                # ── Gerar notificações de match ──
+                try:
+                    # Buscar todos os magistrados ativos
+                    todos = supabase.table("magistrados").select("*").eq("status", "ativo").execute()
+                    if todos.data:
+                        novo_origem = dados_magistrado.get('origem', '')
+                        novo_destino_1 = dados_magistrado.get('destino_1', '')
+                        novo_email = dados_magistrado.get('email', '')
+                        novo_nome = dados_magistrado.get('nome', '')
+
+                        for mag in todos.data:
+                            if mag.get('email', '').lower() == novo_email.lower():
+                                continue  # Pular o próprio usuário
+
+                            mag_origem = mag.get('origem', '')
+                            mag_destino_1 = mag.get('destino_1', '')
+
+                            # Verificar permuta direta via destino_1
+                            if mag_origem == novo_destino_1 and mag_destino_1 == novo_origem:
+                                # Match! Notificar o magistrado existente
+                                supabase.table("notificacoes").insert({
+                                    "email_destino": mag.get('email', ''),
+                                    "tipo": "permuta_direta",
+                                    "mensagem": f"Novo match de permuta direta! {novo_nome} ({novo_origem}) quer ir para {novo_destino_1}.",
+                                    "detalhes": f"Confira na aba 'Busca de Permuta' selecionando {mag_origem} → {novo_origem}."
+                                }).execute()
+
+                                # Notificar também o novo cadastrado
+                                supabase.table("notificacoes").insert({
+                                    "email_destino": novo_email,
+                                    "tipo": "permuta_direta",
+                                    "mensagem": f"Boa notícia! {mag.get('nome', '')} ({mag_origem}) quer ir para {mag_destino_1} — permuta direta possível!",
+                                    "detalhes": f"Confira na aba 'Busca de Permuta' selecionando {novo_origem} → {novo_destino_1}."
+                                }).execute()
+                except Exception as e:
+                    pass  # Não bloquear o cadastro por erro de notificação
             else:
                 st.error(f"❌ {mensagem}")
 
