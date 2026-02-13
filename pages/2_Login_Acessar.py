@@ -855,6 +855,9 @@ if not st.session_state.usuario_autenticado:
         if usuario:
             st.session_state.usuario_autenticado = usuario
             st.success(f"Bem-vindo(a), {usuario.get('nome', 'Usuário')}!")
+            st.session_state["gerenciar_otp_verificado"] = False
+            st.session_state["gerenciar_otp_enviado"] = False
+            st.session_state["gerenciar_otp_email"] = ""
             st.rerun()
         else:
             st.warning("⚠️ Acesso restrito. Seu e-mail não está cadastrado na base de dados.")
@@ -1759,6 +1762,9 @@ else:
     st.markdown("---")
     if st.button("🚪 Sair do sistema"):
         st.session_state.usuario_autenticado = None
+        st.session_state["gerenciar_otp_verificado"] = False
+        st.session_state["gerenciar_otp_enviado"] = False
+        st.session_state["gerenciar_otp_email"] = ""
         st.rerun()
 # Rodapé
 st.markdown(f"""
