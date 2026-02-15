@@ -1,47 +1,19 @@
 import streamlit as st
 from supabase import create_client
-from datetime import datetime
+import os
+import re
 
-from utils.auth_supabase import (
-    validar_email_magistrado,
-    enviar_codigo_otp,
-    verificar_codigo_otp,
-    obter_usuario_logado,
-)
-
-# Configuração da página
-st.set_page_config(
-    page_title="Login - Permutatum",
-    page_icon="🔐",
-    layout="centered",
-    initial_sidebar_state="auto"
-)
-
-# Esconder navegação automática e usar links customizados
-st.markdown(
-    """
-    <style>
-    [data-testid="stSidebarNav"] {display: none;}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.sidebar.page_link("app.py", label="🏠 Home")
-st.sidebar.page_link("pages/1_Cadastre-se.py", label="📋 Cadastre-se")
-st.sidebar.page_link("pages/2_Login_Acessar.py", label="🔑 Login / Acessar")
+# ── Configuração da página ──
+st.set_page_config(page_title="Permutatum - Solicitar Cadastro", page_icon="📝", layout="centered")
 
 
-@st.cache_resource
+# ── Função init_supabase ──
 def init_supabase():
     try:
-        import os
-        # Tentar st.secrets primeiro (Streamlit Cloud)
         try:
             url = st.secrets["SUPABASE_URL"]
             key = st.secrets["SUPABASE_KEY"]
         except:
-            # Fallback para variáveis de ambiente (Render, etc.)
             url = os.environ.get("SUPABASE_URL", "")
             key = os.environ.get("SUPABASE_KEY", "")
 
@@ -49,168 +21,142 @@ def init_supabase():
             st.error("Credenciais do Supabase não encontradas.")
             return None
 
-        supabase = create_client(url, key)
-        return supabase
+        return create_client(url, key)
     except Exception as e:
         st.error(f"Erro ao conectar com Supabase: {e}")
         return None
 
 
-# ─────────────────────────────────────
-# Se já está autenticado, redirecionar
-# ─────────────────────────────────────
-usuario = obter_usuario_logado()
-if usuario:
-    st.success(f"✅ Você já está autenticado como **{usuario['email']}**")
-    st.info("Redirecionando para o cadastro...")
-    import time
-    time.sleep(1)
-    st.switch_page("app.py")
+# ── Lista de tribunais (mesma do arquivo principal) ──
+TRIBUNAIS = [
+    "TJAC", "TJAL", "TJAP", "TJAM", "TJBA", "TJCE", "TJDFT", "TJES",
+    "TJGO", "TJMA", "TJMT", "TJMS", "TJMG", "TJPA", "TJPB", "TJPR",
+    "TJPE", "TJPI", "TJRJ", "TJRN", "TJRS", "TJRO", "TJRR", "TJSC",
+    "TJSE", "TJSP", "TJTO"
+]
 
-# ─────────────────────────────────────
-# Interface de Login
-# ─────────────────────────────────────
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    st.image(
-        "logo.png",
-        width=300,
-    )
 
-st.markdown("---")
-st.title("🔐 Autenticação de Magistrado")
-st.write(
-    "Para realizar seu cadastro no sistema de permutas, "
-    "é necessário verificar seu email funcional."
-)
-st.markdown("---")
+def validar_email(email):
+    padrao = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(padrao, email) is not None
 
-supabase = init_supabase()
 
-if not supabase:
-    st.error("Erro na conexão com o banco de dados. Tente novamente mais tarde.")
-    st.stop()
+# ── Página ──
+st.title("📝 Solicitar Cadastro")
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ETAPA 1: Enviar código OTP
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-if "otp_email_enviado" not in st.session_state:
-    st.session_state["otp_email_enviado"] = False
+st.markdown("""
+<div style="background-color: #e8f4f8; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; border-left: 5px solid #17a2b8;">
+    <p style="margin: 0; font-size: 14px; color: #0c5460;">
+        <strong>Como funciona:</strong><br>
+        1️⃣ Preencha seus dados abaixo<br>
+        2️⃣ Um administrador analisará sua solicitação<br>
+        3️⃣ Após aprovação, você receberá um email de confirmação<br>
+        4️⃣ Com o email confirmado, acesse o sistema pela página de Login e complete seu cadastro
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
-if not st.session_state["otp_email_enviado"]:
-    st.subheader("📧 Etapa 1: Informe seu email funcional")
+# ── Verificar se já tem solicitação pendente ──
+if "solicitacao_enviada" not in st.session_state:
+    st.session_state["solicitacao_enviada"] = False
 
-    email = st.text_input(
-        "Email funcional (@tjxx.jus.br)",
-        placeholder="seu.nome@tjpr.jus.br",
-        help="Use seu email funcional do tribunal (domínio @tjxx.jus.br)",
-    )
+if st.session_state["solicitacao_enviada"]:
+    st.success("✅ Sua solicitação foi enviada com sucesso!")
+    st.info("📧 Você receberá um email no seu email pessoal quando o administrador aprovar seu cadastro. Isso pode levar algumas horas.")
+    st.markdown("👉 Após receber a aprovação, acesse a página de **Login** para completar seu cadastro.")
 
-    if st.button("📨 Enviar código de verificação", use_container_width=True, type="primary"):
-        if not email.strip():
-            st.error("❌ Por favor, digite seu email.")
-        elif not validar_email_magistrado(email):
-            st.error(
-                "❌ Email inválido. Use seu email funcional do tribunal "
-                "(exemplo: nome@tjpr.jus.br)."
-            )
-        else:
-            with st.spinner("Enviando código de verificação..."):
-                resultado = enviar_codigo_otp(supabase, email)
+    if st.button("📝 Fazer nova solicitação"):
+        st.session_state["solicitacao_enviada"] = False
+        st.rerun()
+else:
+    with st.form("form_solicitacao"):
+        st.subheader("Dados para solicitação")
 
-            if resultado["sucesso"]:
-                st.session_state["otp_email_enviado"] = True
-                st.session_state["otp_email"] = email.strip().lower()
-                st.success(f"✅ {resultado['mensagem']}")
-                st.rerun()
-            else:
-                st.error(f"❌ {resultado['mensagem']}")
+        nome = st.text_input("Nome completo *", placeholder="Seu nome completo")
 
-    # Informações
-    st.markdown("---")
-    with st.expander("ℹ️ Dúvidas sobre o login"):
-        st.markdown(
-            """
-            **Por que preciso verificar meu email?**
-            A verificação garante que apenas magistrados(as) com email
-            funcional dos tribunais estaduais possam se cadastrar.
+        tj_origem = st.selectbox("Tribunal de Origem *", options=["Selecione..."] + TRIBUNAIS)
 
-            **Quais emails são aceitos?**
-            Emails dos 27 Tribunais de Justiça estaduais
-            (ex: @tjpr.jus.br, @tjsp.jus.br, @tjrj.jus.br, etc.)
-
-            **Não recebi o código. O que fazer?**
-            - Verifique a pasta de spam/lixo eletrônico
-            - Aguarde até 5 minutos
-            - Tente solicitar novamente
-            """
+        email_pessoal = st.text_input(
+            "Email pessoal *",
+            placeholder="seu.email@gmail.com",
+            help="Email pessoal (Gmail, Yahoo, Hotmail, etc.) — será usado para login e comunicações do sistema"
         )
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ETAPA 2: Verificar código OTP
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-else:
-    email_enviado = st.session_state.get("otp_email", "")
+        email_institucional = st.text_input(
+            "Email institucional (opcional)",
+            placeholder="seu.email@tjxx.jus.br",
+            help="Email funcional do tribunal — usado apenas para validação pelo administrador"
+        )
 
-    st.subheader("🔢 Etapa 2: Digite o código de verificação")
-    st.info(f"📧 Código enviado para: **{email_enviado}**")
+        st.markdown("---")
+        st.markdown(
+            """
+            <div style="background-color: #fff3cd; border-radius: 8px; padding: 12px; border-left: 4px solid #ffc107; font-size: 13px; color: #856404;">
+                <strong>⚠️ Importante:</strong> O email pessoal será seu email de acesso ao sistema.
+                Certifique-se de informar um email que você acessa regularmente.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    codigo = st.text_input(
-        "Código de 6 dígitos",
-        max_chars=6,
-        placeholder="123456",
-        help="Digite o código numérico que você recebeu por email",
-    )
+        submitted = st.form_submit_button("📨 Enviar Solicitação", use_container_width=True, type="primary")
 
-    col1, col2 = st.columns(2)
+    if submitted:
+        # Validações
+        erros = []
+        if not nome or not nome.strip():
+            erros.append("Nome é obrigatório")
+        if tj_origem == "Selecione...":
+            erros.append("Selecione o Tribunal de Origem")
+        if not email_pessoal or not email_pessoal.strip():
+            erros.append("Email pessoal é obrigatório")
+        elif not validar_email(email_pessoal):
+            erros.append("Email pessoal inválido")
+        if email_institucional and not validar_email(email_institucional):
+            erros.append("Email institucional inválido")
 
-    with col1:
-        if st.button("✅ Verificar código", use_container_width=True, type="primary"):
-            if not codigo.strip():
-                st.error("❌ Por favor, digite o código.")
-            elif len(codigo.strip()) != 6 or not codigo.strip().isdigit():
-                st.error("❌ O código deve ter exatamente 6 dígitos numéricos.")
-            else:
-                with st.spinner("Verificando código..."):
-                    resultado = verificar_codigo_otp(supabase, email_enviado, codigo)
+        if erros:
+            for erro in erros:
+                st.error(f"❌ {erro}")
+        else:
+            supabase = init_supabase()
+            if supabase:
+                email_limpo = email_pessoal.strip().lower()
 
-                if resultado["sucesso"]:
-                    st.success(f"✅ {resultado['mensagem']}")
-                    st.info("Redirecionando para o cadastro...")
-                    import time
-                    time.sleep(1.5)
-                    st.switch_page("app.py")
-                else:
-                    st.error(f"❌ {resultado['mensagem']}")
+                # Verificar se já tem cadastro ativo
+                cadastro_existente = supabase.table("magistrados").select("id").eq("email", email_limpo).eq("status", "ativo").execute()
+                if cadastro_existente.data and len(cadastro_existente.data) > 0:
+                    st.error("⚠️ Este email já está cadastrado no sistema. Use a página de Login para acessar.")
+                    st.stop()
 
-    with col2:
-        if st.button("🔄 Reenviar código", use_container_width=True):
-            with st.spinner("Reenviando código..."):
-                resultado = enviar_codigo_otp(supabase, email_enviado)
-            if resultado["sucesso"]:
-                st.success("✅ Novo código enviado! Verifique seu email.")
-            else:
-                st.error(f"❌ {resultado['mensagem']}")
+                # Verificar se já tem solicitação pendente
+                solicitacao_existente = supabase.table("solicitacoes").select("id").eq("email_pessoal", email_limpo).eq("status", "pendente").execute()
+                if solicitacao_existente.data and len(solicitacao_existente.data) > 0:
+                    st.warning("⏳ Você já tem uma solicitação pendente de análise. Aguarde a resposta do administrador.")
+                    st.stop()
 
-    st.markdown("---")
+                # Inserir solicitação
+                try:
+                    response = supabase.table("solicitacoes").insert({
+                        "nome": nome.strip(),
+                        "tj_origem": tj_origem,
+                        "email_pessoal": email_limpo,
+                        "email_institucional": email_institucional.strip().lower() if email_institucional else None,
+                        "tipo": "novo_cadastro",
+                        "status": "pendente"
+                    }).execute()
 
-    if st.button("◀️ Voltar e usar outro email"):
-        st.session_state["otp_email_enviado"] = False
-        st.session_state.pop("otp_email", None)
-        st.rerun()
+                    if response.data:
+                        st.session_state["solicitacao_enviada"] = True
+                        st.rerun()
+                    else:
+                        st.error("❌ Erro ao enviar solicitação. Tente novamente.")
+                except Exception as e:
+                    st.error(f"❌ Erro: {str(e)}")
 
-# Rodapé
+# ── Rodapé ──
 st.markdown("---")
 st.markdown(
-    f"""
-    <div style="text-align: center; padding: 20px 0;">
-        <p style="margin: 5px 0; font-style: italic; font-family: 'Times New Roman', serif; font-size: 16px;">
-            <em>Permutatum</em>
-        </p>
-        <p style="margin: 5px 0; font-size: 13px; color: #888;">
-            Castro/PR — {datetime.now().year}
-        </p>
-    </div>
-    """,
+    "<p style='text-align: center; color: #999; font-size: 12px;'><em>Permutatum — Sistema de Permutas da Magistratura</em></p>",
     unsafe_allow_html=True,
 )
