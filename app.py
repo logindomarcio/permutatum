@@ -32,9 +32,22 @@ st.sidebar.page_link("pages/2_Login_Acessar.py", label="🔑 Login / Acessar")
 @st.cache_resource
 def init_supabase():
     try:
-        url = st.secrets["SUPABASE_URL"]
-        key = st.secrets["SUPABASE_KEY"]
-        return create_client(url, key)
+        import os
+        # Tentar st.secrets primeiro (Streamlit Cloud)
+        try:
+            url = st.secrets["SUPABASE_URL"]
+            key = st.secrets["SUPABASE_KEY"]
+        except:
+            # Fallback para variáveis de ambiente (Render, etc.)
+            url = os.environ.get("SUPABASE_URL", "")
+            key = os.environ.get("SUPABASE_KEY", "")
+
+        if not url or not key:
+            st.error("Credenciais do Supabase não encontradas.")
+            return None
+
+        supabase = create_client(url, key)
+        return supabase
     except Exception as e:
         st.error(f"Erro ao conectar com Supabase: {e}")
         return None
