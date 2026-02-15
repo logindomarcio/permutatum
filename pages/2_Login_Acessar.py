@@ -102,6 +102,28 @@ def validar_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
+# Função para verificar solicitação aprovada
+def verificar_solicitacao_aprovada(email):
+    """Verifica se existe solicitação aprovada para este email."""
+    supabase = init_supabase()
+    if not supabase:
+        return None
+    try:
+        response = (
+            supabase.table("solicitacoes")
+            .select("*")
+            .eq("email_pessoal", email.strip().lower())
+            .eq("status", "aprovado")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if response.data and len(response.data) > 0:
+            return response.data[0]
+        return None
+    except:
+        return None
+
 # Função para atualizar magistrado
 def atualizar_magistrado(id_magistrado, dados_novos):
     supabase = init_supabase()
@@ -1113,7 +1135,157 @@ if "quad_resultados" not in st.session_state:
 if "pecas_quad" not in st.session_state:
     st.session_state["pecas_quad"] = None
 
+if "solicitacao_aprovada" not in st.session_state:
+    st.session_state["solicitacao_aprovada"] = None
+if "email_novo_cadastro" not in st.session_state:
+    st.session_state["email_novo_cadastro"] = None
+
 if not st.session_state.usuario_autenticado:
+    # ══════════════════════════════════════
+    # COMPLETAR CADASTRO (solicitação aprovada)
+    # ══════════════════════════════════════
+    if st.session_state.get("solicitacao_aprovada"):
+        solicitacao = st.session_state["solicitacao_aprovada"]
+        email_cadastro = st.session_state.get("email_novo_cadastro", "")
+
+        st.success(f"✅ Sua solicitação foi aprovada! Complete seu cadastro abaixo.")
+
+        st.markdown(
+            f"""
+            <div style="background-color: #d4edda; border-radius: 10px; padding: 16px; margin-bottom: 20px; border-left: 5px solid #28a745;">
+                <p style="margin: 0; font-size: 14px; color: #155724;">
+                    <strong>Nome:</strong> {solicitacao.get('nome', '')}<br>
+                    <strong>TJ Origem:</strong> {solicitacao.get('tj_origem', '')}<br>
+                    <strong>Email:</strong> {email_cadastro}
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        with st.form("completar_cadastro"):
+            st.subheader("Complete seus dados")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                entrancia = st.selectbox("Entrância *", options=ENTRANCIAS)
+                telefone = st.text_input("Telefone *", placeholder="DDD + número")
+                telefone_visivel = st.checkbox(
+                    "Tornar meu telefone visível para outros magistrados",
+                    value=True,
+                    help="Se desmarcado, apenas seu email será exibido como forma de contato"
+                )
+
+            with col2:
+                destino_1 = st.selectbox("1º Destino desejado *", options=TRIBUNAIS)
+                destino_2_opcoes = [""] + TRIBUNAIS
+                destino_2 = st.selectbox("2º Destino (opcional)", options=destino_2_opcoes)
+                destino_3_opcoes = [""] + TRIBUNAIS
+                destino_3 = st.selectbox("3º Destino (opcional)", options=destino_3_opcoes)
+
+            completar_btn = st.form_submit_button("✅ Finalizar Cadastro", use_container_width=True, type="primary")
+
+        if completar_btn:
+            erros = []
+            if not telefone or not telefone.strip():
+                erros.append("Telefone é obrigatório")
+            if solicitacao.get('tj_origem') == destino_1:
+                erros.append("Destino não pode ser igual ao tribunal de origem")
+
+            if erros:
+                for erro in erros:
+                    st.error(f"❌ {erro}")
+            else:
+                supabase = init_supabase()
+                if supabase:
+                    # Verificar se email já está cadastrado (segurança extra)
+                    email_check = supabase.table("magistrados").select("id").eq("email", email_cadastro).eq("status", "ativo").execute()
+                    if email_check.data and len(email_check.data) > 0:
+                        st.error("⚠️ Este email já está cadastrado. Use o login normal.")
+                        st.session_state["solicitacao_aprovada"] = None
+                        st.rerun()
+                    else:
+                        try:
+                            # Inserir na tabela magistrados
+                            dados_magistrado = {
+                                "nome": solicitacao.get('nome', '').strip(),
+                                "email": email_cadastro,
+                                "origem": solicitacao.get('tj_origem', ''),
+                                "entrancia": entrancia,
+                                "destino_1": destino_1,
+                                "destino_2": destino_2 if destino_2 else None,
+                                "destino_3": destino_3 if destino_3 else None,
+                                "telefone": telefone.strip(),
+                                "telefone_visivel": telefone_visivel,
+                                "status": "ativo"
+                            }
+
+                            response = supabase.table("magistrados").insert(dados_magistrado).execute()
+
+                            if response.data:
+                                # Atualizar solicitação para "cadastrado"
+                                supabase.table("solicitacoes").update({
+                                    "status": "cadastrado"
+                                }).eq("id", solicitacao.get('id')).execute()
+
+                                # Gerar notificações de match
+                                try:
+                                    todos = supabase.table("magistrados").select("*").eq("status", "ativo").execute()
+                                    if todos.data:
+                                        for mag in todos.data:
+                                            if mag.get('email', '').lower() == email_cadastro.lower():
+                                                continue
+                                            mag_origem = mag.get('origem', '')
+                                            mag_destino_1 = mag.get('destino_1', '')
+                                            novo_origem = dados_magistrado.get('origem', '')
+                                            novo_destino_1 = dados_magistrado.get('destino_1', '')
+
+                                            if mag_origem == novo_destino_1 and mag_destino_1 == novo_origem:
+                                                supabase.table("notificacoes").insert({
+                                                    "email_destino": mag.get('email', ''),
+                                                    "tipo": "permuta_direta",
+                                                    "mensagem": f"Novo match! {dados_magistrado['nome']} ({novo_origem}) quer ir para {novo_destino_1} — permuta direta possível!",
+                                                    "detalhes": f"Confira na aba 'Busca de Permuta' selecionando {mag_origem} → {novo_origem}."
+                                                }).execute()
+
+                                                supabase.table("notificacoes").insert({
+                                                    "email_destino": email_cadastro,
+                                                    "tipo": "permuta_direta",
+                                                    "mensagem": f"Boa notícia! {mag.get('nome', '')} ({mag_origem}) quer ir para {mag_destino_1} — permuta direta possível!",
+                                                    "detalhes": f"Confira na aba 'Busca de Permuta' selecionando {novo_origem} → {novo_destino_1}."
+                                                }).execute()
+                                except:
+                                    pass
+
+                                st.success("🎉 Cadastro finalizado com sucesso!")
+                                st.balloons()
+                                st.info("Agora faça login com seu email para acessar o sistema.")
+
+                                # Limpar session state
+                                st.session_state["solicitacao_aprovada"] = None
+                                st.session_state["email_novo_cadastro"] = None
+                                st.cache_data.clear()
+
+                                import time
+                                time.sleep(3)
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao finalizar cadastro. Tente novamente.")
+                        except Exception as e:
+                            if "duplicate" in str(e).lower():
+                                st.error("⚠️ Este email já está cadastrado.")
+                            else:
+                                st.error(f"❌ Erro: {str(e)}")
+
+        # Botão cancelar
+        if st.button("◀️ Voltar ao login"):
+            st.session_state["solicitacao_aprovada"] = None
+            st.session_state["email_novo_cadastro"] = None
+            st.rerun()
+
+        st.stop()  # Não mostrar o formulário de login abaixo
+
     st.write("Digite seu e-mail para acessar a aplicação:")
     
     email_input = st.text_input("E-mail:", placeholder="seu.email@exemplo.com")
@@ -1128,9 +1300,15 @@ if not st.session_state.usuario_autenticado:
             st.session_state["gerenciar_otp_email"] = ""
             st.rerun()
         else:
-            st.warning("⚠️ Acesso restrito. Seu e-mail não está cadastrado na base de dados.")
-            if st.button("📝 Ir para página de cadastro"):
-                st.switch_page("app.py")
+            # Verificar se tem solicitação aprovada
+            solicitacao = verificar_solicitacao_aprovada(email_input)
+            if solicitacao:
+                st.session_state["solicitacao_aprovada"] = solicitacao
+                st.session_state["email_novo_cadastro"] = email_input.strip().lower()
+                st.rerun()
+            else:
+                st.warning("⚠️ Email não encontrado no sistema.")
+                st.info("Se você ainda não solicitou cadastro, acesse a página **Cadastre-se** no menu lateral.")
 
 else:
     # Usuário autenticado - mostrar sistema completo
