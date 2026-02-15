@@ -83,9 +83,9 @@ else:
         )
 
         email_institucional = st.text_input(
-            "Email institucional (opcional)",
+            "Email institucional *",
             placeholder="seu.email@tjxx.jus.br",
-            help="Email funcional do tribunal — usado apenas para validação pelo administrador"
+            help="Email funcional do tribunal — usado para validação pelo administrador. Não será usado para login."
         )
 
         st.markdown("---")
@@ -112,7 +112,9 @@ else:
             erros.append("Email pessoal é obrigatório")
         elif not validar_email(email_pessoal):
             erros.append("Email pessoal inválido")
-        if email_institucional and not validar_email(email_institucional):
+        if not email_institucional or not email_institucional.strip():
+            erros.append("Email institucional é obrigatório")
+        elif not validar_email(email_institucional):
             erros.append("Email institucional inválido")
 
         if erros:
