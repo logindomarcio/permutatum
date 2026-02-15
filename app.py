@@ -143,6 +143,11 @@ def inserir_magistrado(dados):
         return False, "Erro na conexão com o banco de dados"
 
     try:
+        # Verificar se email já está cadastrado
+        email_check = supabase.table("magistrados").select("id").eq("email", dados.get('email', '')).eq("status", "ativo").execute()
+        if email_check.data and len(email_check.data) > 0:
+            return False, "⚠️ Este e-mail já está cadastrado no sistema. Use a página de Login para acessar seus dados, ou edite seu cadastro em 'Gerenciar meus dados'."
+
         response = supabase.table("magistrados").insert(dados).execute()
         return True, "Dados cadastrados com sucesso!"
     except Exception as e:

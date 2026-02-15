@@ -2107,7 +2107,6 @@ else:
 
                     if submitted:
                         # Recarregar dados atuais do usuário antes de tentar atualizar
-                        st.cache_data.clear()
                         usuario_atual = verificar_email(usuario.get('email'))
                         if not usuario_atual:
                             st.error("Usuário não encontrado. Faça login novamente.")
