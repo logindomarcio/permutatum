@@ -53,7 +53,6 @@ TRIBUNAIS = [
 ]
 
 # Função para conectar ao Supabase
-@st.cache_resource
 def init_supabase():
     try:
         import os
@@ -78,14 +77,34 @@ def init_supabase():
 
 # Função para carregar todos os dados
 @st.cache_data(ttl=300)
+def _carregar_dados_cache():
+    """Função interna cacheada."""
+    supabase = init_supabase()
+    if not supabase:
+        return None
+    try:
+        response = supabase.table("magistrados").select("*").eq("status", "ativo").execute()
+        if response.data and len(response.data) > 0:
+            return response.data
+        return None
+    except:
+        return None
+
 def carregar_dados():
+    """Tenta cache. Se vazio, limpa cache e busca direto."""
+    dados = _carregar_dados_cache()
+    if dados and len(dados) > 0:
+        return dados
+    # Cache falhou ou vazio - limpar e buscar direto
+    st.cache_data.clear()
     supabase = init_supabase()
     if not supabase:
         return []
-    
     try:
         response = supabase.table("magistrados").select("*").eq("status", "ativo").execute()
-        return response.data
+        if response.data and len(response.data) > 0:
+            return response.data
+        return []
     except:
         return []
 

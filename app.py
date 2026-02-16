@@ -29,7 +29,6 @@ st.sidebar.page_link("pages/2_Login_Acessar.py", label="🔑 Login / Acessar")
 
 
 # Função para conectar ao Supabase
-@st.cache_resource
 def init_supabase():
     try:
         import os
